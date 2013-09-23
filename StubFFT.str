@@ -1,0 +1,33 @@
+
+void->complex filter GenSource(int n, int m) {
+	work push n * m {
+		for(int i = 0; i < n * m; i++) {
+			complex S;
+			S.real = i;
+			S.imag = n * m - i;
+			S.id = i;
+			push(S);
+		}
+	}
+}
+
+complex->void filter DisplayComplex() {
+	work pop 1 {
+		complex S = pop();
+		//println(S.real + " " + S.imag + " " + S.id);
+	}
+}
+
+
+
+void->void pipeline StubFFT() {
+
+//	int c = 128;
+//	int r = 256;
+
+	int c = 4096;
+	int r = 2;
+	add GenSource(c, r);
+	add FTY2D(c, r);
+	add DisplayComplex();
+}

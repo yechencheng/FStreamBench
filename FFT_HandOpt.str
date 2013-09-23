@@ -1,0 +1,162 @@
+complex-> complex pipeline FTY2D(int rows, int cols) 
+{
+    add Transpose(rows, cols);
+    add FFT2Dshift(cols, rows);    
+    add FFT2D(cols, rows);
+    add FFT2Dshift(cols, rows);    
+    add Transpose(cols, rows);
+}
+
+ complex-> complex filter Transpose(int rows, int cols)
+{
+	//!!!For TEST ONLY!!!
+	void ALPHA(complex S)
+	{
+		complex Y = S;
+	}
+	
+	int T(int id)
+	{
+		int i = id / cols;
+		int j = id - i * cols;
+		if(j < 0) j = cols - 1;
+		return i + j * rows;
+	}
+	
+	//no ref or & pass, so I code it as array
+	void kernel(complex[1] S)
+	{
+		S[0].id = T(S[0].id);
+	}
+	
+	work push 1 pop 1 {
+		complex[1] S;
+		S[0] = pop();
+		kernel(S);
+		push(S[0]);
+	}
+}
+
+complex-> complex filter FFT2Dshift(int rows, int cols) 
+{
+	int T(int id)
+	{
+		return (id / cols + rows_mid) % rows * cols + (id % cols + cols_mid) % cols;
+	}
+	
+	void kernel(complex[1] S)
+	{
+		S[0].id = T(S[0].id);
+	}
+	
+	int cols_mid;
+	int rows_mid;
+    init {
+		cols_mid = cols / 2;
+		rows_mid = rows / 2;
+    }
+    
+	work push 1 pop 1 {
+		complex[1] S;
+		S[0] = pop();
+		//println("B " + S[0].id + " " + S[0].real);
+		kernel(S);
+		//println("A " + S[0].id + " " + S[0].real);
+		push(S[0]);
+	}
+}
+
+
+complex-> complex filter FFT2D(int rows, int cols) 
+{
+	 complex[cols][rows] Data;
+	 complex[rows] RT;
+	 int[cols] Count;
+	
+	int T(int id)
+	{
+		int i = id / rows;
+		int j = id - id / rows * rows;
+		return j * cols + i;
+	}
+	
+	// Packaged Output depends on the input group
+	void kernel(complex[rows] input,  complex[rows] output)
+	{
+		//input : k*cols + i
+		for(int i = 0; i < rows; i++)
+		{
+			float real = 0.0;
+			float imag = 0.0;
+			for(int k = 0; k < rows; k++)
+			{
+				int l = (i * k) % rows;		//trick
+				complex t = input[k];
+				real += (t.real * cos_value[l]) + (t.imag * sin_value[l]);
+				imag += (t.imag * cos_value[l]) - (t.real * sin_value[l]);
+			}
+			output[i].real = real;
+			output[i].imag = imag;
+			output[i].id = T(output[i].id);
+		}
+	}
+	
+	//PROBLEM!!!!!!!!
+	//recover order
+	void sort(complex[rows] T)
+	{
+		for(int i = 0; i < rows; i++)
+			for(int j = i + 1; j < rows; j++)
+			{
+				if(T[i].id < T[j].id) continue;
+			
+				int target = j;
+				int source = i;
+			
+				complex temp = T[target];
+				temp.id = T[target].id;
+			
+				T[target] = T[source];
+				T[target].id = T[source].id;
+			
+				T[source] = temp;
+				T[source].id = temp.id;
+			}
+	}
+	
+	int Work(complex S)
+	{
+		int x = S.id % cols;
+		//println(S.id + " " + S.real + " " + S.imag);
+		//println(x + " " + Count[14]);
+		Data[x][Count[x]] = S;
+		Data[x][Count[x]++].id = S.id;
+		if(Count[x] == rows)
+		{
+			sort(Data[x]);
+			kernel(Data[x], RT);
+			Count[x] = 0;
+			return x;
+		}
+		return -1;
+	}
+	
+    float[rows] cos_value;
+    float[rows] sin_value;
+
+    init {
+        for (int i = 0; i < rows; i++) {
+            cos_value[i] = cos(PI2 * (float)i / (float)rows);
+            sin_value[i] = sin(PI2 * (float)i / (float)rows);
+        }
+    }
+    
+    work push 1 pop 1 {
+			int x = Work(pop());
+			if(x != -1)
+			{
+				for(int j = 0; j < rows; j++)
+					push(RT[j]);
+			}
+    }
+}
