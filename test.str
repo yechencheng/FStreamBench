@@ -1,0 +1,42 @@
+void->void pipeline test() {
+  add Source();
+  
+  /*
+  add float->float splitjoin{
+    split roundrobin;
+    for(int i = 0; i < 8; i++)
+      add Process();
+    join roundrobin;
+  }
+  */
+  add Process();
+  add Output();
+}
+
+void->float filter Source()
+{
+  work push 1 {
+      push(4.13);
+  }
+}
+
+float->float filter Process()
+{
+  work pop 1 push 1 {
+
+      float x = pop();
+      for(int i = 0; x >= 1.0; i++)
+      {
+          x = pow(x, 0.9);
+      }
+      push(x);
+    
+  }
+}
+
+float->void filter Output()
+{
+  work pop 1 {
+    println(pop());
+  }
+}
